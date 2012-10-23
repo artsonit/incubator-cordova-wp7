@@ -63,6 +63,11 @@ namespace WP7CordovaClassLib
         /// </summary>
         private bool PageDidChange = false;
 
+        /// <summary>
+        /// Sentinal to keep track if page has loaded cordova js framework or not
+        /// </summary>
+        private bool PageHasCordovaJs = false;
+
         private static string AppRoot = "/app/";
 
 
@@ -320,38 +325,40 @@ namespace WP7CordovaClassLib
 
         void page_BackKeyPress(object sender, CancelEventArgs e)
         {
-
-            if (OverrideBackButton)
+            if (OverrideBackButton && PageHasCordovaJs)
             {
                 try
                 {
                     CordovaBrowser.InvokeScript("CordovaCommandResult", new string[] { "backbutton" });
                     e.Cancel = true;
+                    return;
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine("Exception while invoking backbutton into cordova view: " + ex.Message);
                 }
             }
-            else
+
+            /*
+             * if the back button is not override, we use history.cback()
+             * if Cordova has failed to dispach to the overrideBackButton handle we fall back to history.back();
+             */
+            try
             {
-                try
-                {
-                    PageDidChange = false;
+                PageDidChange = false;
 
-                    Uri uriBefore = this.Browser.Source;
-                    // calling js history.back with result in a page change if history was valid.
-                    CordovaBrowser.InvokeScript("eval", new string[] { "(function(){window.history.back();})()" });
+                Uri uriBefore = this.Browser.Source;
+                // calling js history.back with result in a page change if history was valid.
+                CordovaBrowser.InvokeScript("eval", new string[] { "(function(){window.history.back();})()" });
 
-                    Uri uriAfter = this.Browser.Source;
-
-                    e.Cancel = PageDidChange || (uriBefore != uriAfter);
-                }
-                catch (Exception)
-                {
-                    e.Cancel = false; // exit the app ... ?
-                }
+                Uri uriAfter = this.Browser.Source;
+                e.Cancel = PageDidChange || (uriBefore != uriAfter);
             }
+            catch (Exception)
+            {
+                e.Cancel = false; // exit the app ... ?
+            }
+
         }
 
         void GapBrowser_LoadCompleted(object sender, System.Windows.Navigation.NavigationEventArgs e)
@@ -361,10 +368,12 @@ namespace WP7CordovaClassLib
             try
             {
                 CordovaBrowser.InvokeScript("execScript", new string[] { nativeReady });
+                PageHasCordovaJs = true;
             }
             catch (Exception /*ex*/)
             {
                 Debug.WriteLine("Error calling js to fire nativeReady event. Did you include cordova-x.x.x.js in your html script tag?");
+                PageHasCordovaJs = false;
             }
 
             if (this.CordovaBrowser.Opacity < 1)
@@ -421,7 +430,7 @@ namespace WP7CordovaClassLib
                 {
                     case "overridebackbutton":
                         string arg0 = WP7CordovaClassLib.Cordova.JSON.JsonHelper.Deserialize<string[]>(commandCallParams.Args)[0];
-                        this.OverrideBackButton = (arg0 != null && arg0.Length > 0 && arg0.ToLower() == "true"); 
+                        this.OverrideBackButton = (arg0 != null && arg0.Length > 0 && arg0.ToLower() == "true");
                         break;
                 }
             }
